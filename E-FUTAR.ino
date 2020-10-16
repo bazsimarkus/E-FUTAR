@@ -80,7 +80,7 @@ int SecondsToMinutes(long secondsLong) {
 
 //To print the arrival time, the time we first converted to int must be converted to char, and the apostrophe must be placed at the end, this is what the function does
 void ArrivalMinutesToString(int arrivalMinutes, char* arrivalString) {
-    if(arrivalMinutes < 1) { // ha
+    if(arrivalMinutes < 1) {
         for(int k=0; k<3; k++) arrivalString[k] = ' '; // it must be cleared, so that if anything is left out of the previous cycle, it will be deleted
         arrivalString[0]= '-';
     }
@@ -130,7 +130,7 @@ void ConvertTime() {
         clockTimeString[3] = (currentTimeMinutes/10) + '0';
         clockTimeString[4] = (currentTimeMinutes%10) + '0';
     }
-    Serial.print("A pontos ido: ");
+    Serial.print("The current time: ");
     Serial.print(currentTimeHours);
     Serial.print(":");
     Serial.println(currentTimeMinutes);
@@ -141,7 +141,7 @@ void setupDisplay() {
     digitalWrite(16, LOW);    // set GPIO16 low to reset OLED
     delay(50);
     digitalWrite(16, HIGH); // while OLED is running, must set GPIO16 in high
-    // Initialising the UI will init the display too.
+    // Initializing the UI will init the display too.
     display.init();
 
     display.flipScreenVertically();
@@ -231,7 +231,7 @@ void setup() {
     Serial.println("\nStarting connection to server...");
     // if you get a connection, report back via serial:
     if (client.connect(server, 80)) {
-        Serial.println("connected to server");
+        Serial.println("Connected to server");
     }
 }
 
@@ -480,7 +480,7 @@ void disconnect() {
     client.stop();
 }
 
-// Pause for a 1 minute
+// Wait a little, so that we don't do queries too often
 void wait() {
     Serial.println("Wait 2 seconds");
     delay(2000);
@@ -491,7 +491,7 @@ void printWifiStatus() {
     Serial.print("SSID: ");
     Serial.println(WiFi.SSID());
 
-    // print your WiFi shield's IP address:
+    // print your WiFi device's IP address:
     IPAddress ip = WiFi.localIP();
     Serial.print("IP Address: ");
     Serial.println(ip);

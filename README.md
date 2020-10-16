@@ -1,7 +1,7 @@
 ﻿# E-FUTÁR ![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/bkk_icon.png)
 **Beágyazott BKK Futár port ESP32 SoC-ra SSD1306 OLED kijelzővel, Arduino fejlesztőkörnyezetben**
 
-Írta: Márkus Balázs - 2017
+Írta: Márkus Balázs
 
 *This repository contains an embedded online bus tracking software that is only useful in Budapest, Hungary - so the documentation is written in Hungarian as well. Thanks for understanding!*
 
