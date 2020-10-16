@@ -21,21 +21,21 @@
 #include "SSD1306.h" // alias for `#include "SSD1306Wire.h"`
 #include <stdlib.h>
 
-bool nyariidoszamitas = false; //nyáron true, télen false, ekkor egy órát hozzáad a lekérdezett UNIX időhöz
+bool nyariidoszamitas = false; //true in summer, false in winter, in the second case it adds an hour to the queried UNIX time
 
-enum buszmegallo {Baross, Janos, Varoskozpont}; // A három megállót megkülömböztető enum, ezek között váltunk a vezérlőgomb interruptjával, és a main loopban ez alapján állítódik meg, hogy milyen HTTP GET requestet küldünk a szervernek
-enum buszmegallo megallo = Baross; // az alapértelmezett buszmegálló a Pesterzsébet, Baross utca
+enum buszmegallo {Baross, Janos, Varoskozpont}; // The enum that distinguishes the three preprogrammed stops, we switch between them with the interrupt of the control button, and in the main loop, the HTTP request we send to the server is determined based on this value
+enum buszmegallo megallo = Baross; // default bus stop
 
 
-bool BarossJanosButtonPressed = false; // a pergésmentesítés miatt
-//OLED pins to ESP32 GPIOs via this connecthin:
+bool BarossJanosButtonPressed = false; // debounce
+//OLED pins to ESP32 GPIOs via this connecting:
 //OLED_SDA -- GPIO4
 //OLED_SCL -- GPIO15
 //OLED_RST -- GPIO16
 
-SSD1306  display(0x3c, 4, 15); //Az OLED kijelzőt inicializáljuk
+SSD1306  display(0x3c, 4, 15); //Init OLED display
 
-//Kommentezd ki a megfelelő wifi adatokat!
+//Modify WiFi credentials to your local WiFi
 
 char ssid[] = "SSID"; //  your network SSID (name)
 char pass[] = "Pass";    // your network password (use for WPA, or use as key for WEP)
@@ -43,33 +43,33 @@ char pass[] = "Pass";    // your network password (use for WPA, or use as key fo
 
 int keyIndex = 0;            // your network key Index number (needed only for WEP)
 
-int status = WL_IDLE_STATUS; // a WIFI csatlakozását jelző státuszváltozó
+int status = WL_IDLE_STATUS; // a status variable indicating the connection to WIFI
 
 // Initialize the Ethernet client library with the IP address and port of the server that you want to connect to (port 80 is default for HTTP):
 WiFiClient client;
 
-// Ha az alapértelmezett megálló: Pesterzsébet, Baross utca, ezt a rész kommentezd ki!
+// Strings to store the stop name, and the link to the API
 char* stopName = "Baross utca";
 char* resource = "/bkk-utvonaltervezo-api/ws/otp/api/where/arrivals-and-departures-for-stop.json?stopId=BKK_F04144&onlyDepartures=onlyDepartures&limit=10&minutesBefore=0&minutesAfter=60";                    // http resource
 
-//HTTP kapcsolat adatainak megadása
+//HTTP connection information
 const char* server = "futar.bkk.hu";  // server's address
 const unsigned long BAUD_RATE = 115200;                 // serial connection speed
 const unsigned long HTTP_TIMEOUT = 10000;  // max respone time from server
 const size_t MAX_CONTENT_SIZE = 512;       // max size of the HTTP response
 
-//A BusData struktúra az alap adattároló egység, egy struktúra egy busz adatait tárolja, és 10 darab ilyen struktúra alkot egy 10-es buszlistát (lásd buszlista tömb)
+//The BusData structure is the basic data storage unit, a structure stores the data of a bus, and 10 such structures form a bus list of 10 (see bus list array)
 struct BusData {
-    char shortName[16]; //A járat száma
-    char stopHeadsign[32]; //A célállomás neve
-    char stopHeadsignWithShortName[32]; //A járat száma + a célállomás neve együtt, mint a buszokon kiírva, a kiíratáshoz kell egyben
-    char predictedArrivalTime[32]; //A lekérdezett jósolt vagy menetrendszerinti érkezési idő (attól függ hogy van-e aktív GPS kapcsolat a buszon) EPOCHtól számított időformátumban, milliszekundumban
-    long predictedArrivalTimeLong; //A jósolt vagy menetrendszerinti érkezési idő (attól függ hogy van-e aktív GPS kapcsolat a buszon) EPOCHtól számított időformátumban, másodpercben, long formátumban
-    int predictedArrivalMinutesInt; //Az érkezési idő percben megadva
-    char predictedArrivalMinutesString[3]; //Az érkezési idő percben megadva, stringként, végén egy aposztróffal
+    char shortName[16]; //Line number
+    char stopHeadsign[32]; //Name of the destination
+    char stopHeadsignWithShortName[32]; //The line number + the name of the destination together, as posted on the buses, required for the display
+    char predictedArrivalTime[32]; //Queryed predicted or scheduled arrival time (depending on whether there is an active GPS connection on the bus) in milliseconds from EPOCH time
+    long predictedArrivalTimeLong; //Queryed predicted or scheduled arrival time (depending on whether there is an active GPS connection on the bus) in milliseconds from EPOCH time, in long type
+    int predictedArrivalMinutesInt; //Arrival time in minutes
+    char predictedArrivalMinutesString[3]; //Arrival time in minutes as a string, with an apostrophe concatenated at the end
 };
 
-//A long típusban, másodperces felbontásban megkapott érkezési időt átalakítja int típusú, perces felbontásúvá, hogy a predictedArrivalMinutesInt-ban tudjam másolni
+//Converts the the arrival time that we got in long type, and a resolution of seconds to int type, with a resolution of one minute, to be able to copy it to predictedArrivalMinutesInt
 int SecondsToMinutes(long secondsLong) {
     long minutesLong;
     int minutesInt;
@@ -78,21 +78,21 @@ int SecondsToMinutes(long secondsLong) {
     return minutesInt;
 }
 
-//Az érkezési idő kiíratásához az előbb int-té konvertált időt kell char-rá konvertálni, valamint a végére az aposztrófot tenni, ezt csinálja a függvény
+//To print the arrival time, the time we first converted to int must be converted to char, and the apostrophe must be placed at the end, this is what the function does
 void ArrivalMinutesToString(int arrivalMinutes, char* arrivalString) {
     if(arrivalMinutes < 1) { // ha
-        for(int k=0; k<3; k++) arrivalString[k] = ' '; // ki kell clearelni előtte, hogy ha az előző ciklusból bennemaradt valami, az kitörlődjön
+        for(int k=0; k<3; k++) arrivalString[k] = ' '; // it must be cleared, so that if anything is left out of the previous cycle, it will be deleted
         arrivalString[0]= '-';
     }
     else {
         if(arrivalMinutes<10) {
-            for(int k=0; k<3; k++) arrivalString[k] = ' '; // ki kell clearelni előtte, hogy ha az előző ciklusból bennemaradt valami, az kitörlődjön
+            for(int k=0; k<3; k++) arrivalString[k] = ' '; // it must be cleared, so that if anything is left out of the previous cycle, it will be deleted
             arrivalString[0]=arrivalMinutes + '0';
             arrivalString[1]= '\'';
-            arrivalString[2]= '\0'; // lerövidítjük a stringet mert jobbra záráskor egy vonalba kell legyenek az aposztrófok, így oldjuk meg!
+            arrivalString[2]= '\0'; // we shorten the string because the apostrophes should be in a line on the right side
         }
         else {
-            for(int k=0; k<3; k++) arrivalString[k] = ' '; // ki kell clearelni előtte
+            for(int k=0; k<3; k++) arrivalString[k] = ' '; // it must be cleared, so that if anything is left out of the previous cycle, it will be deleted
             arrivalString[0]=(arrivalMinutes/10) + '0';
             arrivalString[1]=(arrivalMinutes%10) + '0';
             arrivalString[2]= '\'';
@@ -112,19 +112,19 @@ void ConvertTime() {
         currentTimeMinutes = (currentTimeLong % 3600) / 60;
     }
     else {
-        currentTimeHours = ((((currentTimeLong % 86400) / 3600)+1)%24); //azért kell a mod24 mert a téli időszámítás miatt 24:05-öt mutatott éjjel
+        currentTimeHours = ((((currentTimeLong % 86400) / 3600)+1)%24); // we need mod24 because it showed 24:05 at night due to winter time
         currentTimeMinutes = (currentTimeLong % 3600) / 60;
     }
     if(currentTimeHours<10) {
-        for(int k=0; k<4; k++) clockTimeString[k] = ' '; // ki kell clearelni előtte ha kétjegyűről egyjegyűre vált
-        clockTimeString[0] = currentTimeHours + '0'; //konverzió char-rá
+        for(int k=0; k<4; k++) clockTimeString[k] = ' '; // must be cleared before it changes from two digits to one digits
+        clockTimeString[0] = currentTimeHours + '0'; // conversion to char
         clockTimeString[1] = ':';
         clockTimeString[2] = (currentTimeMinutes/10) + '0';
         clockTimeString[3] = (currentTimeMinutes%10) + '0';
     }
     else {
-        for(int k=0; k<4; k++) clockTimeString[k] = ' '; // ki kell clearelni előtte
-        clockTimeString[0] = (currentTimeHours/10) + '0'; //konverzió char-rá
+        for(int k=0; k<4; k++) clockTimeString[k] = ' '; // it must be cleared, so that if anything is left out of the previous cycle, it will be deleted
+        clockTimeString[0] = (currentTimeHours/10) + '0'; // conversion to char
         clockTimeString[1] = (currentTimeHours%10) + '0';
         clockTimeString[2] = ':';
         clockTimeString[3] = (currentTimeMinutes/10) + '0';
@@ -176,7 +176,7 @@ void setup() {
     Serial.begin(115200);
     pinMode(0, INPUT_PULLUP);
     attachInterrupt(digitalPinToInterrupt(0), megallovaltas, FALLING);
-    pinMode(25, OUTPUT); //a busy LED-nek az alaplapon
+    pinMode(25, OUTPUT); //the busy LED on the motherboard
     digitalWrite(25, LOW);
     setupDisplay();
     display.clear();
@@ -184,9 +184,9 @@ void setup() {
     display.setFont(ArialMT_Plain_24);
     display.drawString(0, 0, "E-FUTÁR");
     display.setFont(ArialMT_Plain_16);
-    display.drawString(0, 28, "Csatlakozás");
+    display.drawString(0, 28, "Csatlakozás"); // "Connecting"
     display.setFont(ArialMT_Plain_10);
-    display.drawString(0, 52, "Írta: Márkus Balázs - 2017");
+    display.drawString(0, 52, "Írta: Márkus Balázs"); // "Written by Balazs Markus"
     display.display();
     // attempt to connect to Wifi network:
 
@@ -195,7 +195,7 @@ void setup() {
 
     WiFi.begin(ssid, pass);
 
-    //A BOOT képernyőn a pontok animálva növekednek, ugyanúgy mint a Serial üzenetben, míg a wifihez nem csatlakozik
+    //On the BOOT screen, the dots are animated, just like in a Serial message, until you are connected to Wi-Fi
     int x = 88;
     while (WiFi.status() != WL_CONNECTED) {
         WiFi.begin(ssid, pass);
@@ -207,15 +207,15 @@ void setup() {
         x=x+4;
         if(x>126) {
             x=88;
-            //újrarajzoljuk a kijelzőt, ha a pontok elérték a szélét
+            //redraw the display when the dots reach the edge
             display.clear();
             display.setTextAlignment(TEXT_ALIGN_LEFT);
             display.setFont(ArialMT_Plain_24);
             display.drawString(0, 0, "E-FUTÁR");
             display.setFont(ArialMT_Plain_16);
-            display.drawString(0, 28, "Csatlakozás");
+            display.drawString(0, 28, "Csatlakozás"); // "Connecting"
             display.setFont(ArialMT_Plain_10);
-            display.drawString(0, 52, "Írta: Márkus Balázs - 2017");
+            display.drawString(0, 52, "Írta: Márkus Balázs"); // "Written by Balazs Markus"
             display.display();
         }
     }
@@ -249,16 +249,16 @@ void loop() {
         }
     }
     disconnect();
-    // innentől kezdve a grafikus rész
+    // from there the graphic part
     drawList();
 
-    //egy kis delay hogy ne pörögjön
+    // a little delay so that it doesn't do quieries too often
     wait();
 }
 
 void drawList() {
-    //Lista kiiratasa
-    // Tovabbi betutipusok a http://oleddisplay.squix.ch/ oldalon keszithetoek
+    // Pringting the list to the screen
+    // Additional fonts are available at http://oleddisplay.squix.ch/
    
     display.clear();
 
@@ -270,15 +270,15 @@ void drawList() {
     display.drawString(128, 0, clockTimeString);
     display.setTextAlignment(TEXT_ALIGN_LEFT);
     if(buszlista[0].stopHeadsign[0]=='\0') {
-        display.drawString(0, 20, "Nem található indulás");
-        display.drawString(0, 34, "60 percen belül.");
+        display.drawString(0, 20, "Nem található indulás"); // "No departure found"
+        display.drawString(0, 34, "60 percen belül."); // "in 60 minutes"
     }
     else {
         display.drawString(0, 20, buszlista[0].stopHeadsignWithShortName);
         display.drawString(0, 34, buszlista[1].stopHeadsignWithShortName);
         display.drawString(0, 48, buszlista[2].stopHeadsignWithShortName);
         display.setTextAlignment(TEXT_ALIGN_RIGHT);
-        display.drawString(128, 20, buszlista[0].predictedArrivalMinutesString); //116nál már a percvessző kilóg szóval 115-höz kell tenni a percszámokat! 88'-vel tesztelve
+        display.drawString(128, 20, buszlista[0].predictedArrivalMinutesString); //At 116 the apostrophe is sticking out so you have to put the minute numbers at 115! Tested with 88 '
         display.drawString(128, 34, buszlista[1].predictedArrivalMinutesString);
         display.drawString(128, 48, buszlista[2].predictedArrivalMinutesString);
     }
@@ -330,7 +330,7 @@ bool skipResponseHeaders() {
 uint16_t maxArraySize=0, ArraySize=0;
 
 void clearBusList() {
-    //Előbb kinullázuk a buszlistát, majd belemásoljuk a megfelelő mennyiségű induló buszt, amit a MaxArrySize-ban határoztunk meg, a többi nulla marad
+    //First we reset the bus list and then copy the appropriate number of departing buses that we defined in MaxArraySize, the rest remain zero
     for(int t=0; t<10; t++) {
         strcpy(buszlista[t].shortName," ");
         buszlista[t].stopHeadsign[0] = '\0';
@@ -358,11 +358,11 @@ bool readReponseContent() {
         return false;
     }
 
-// mikor éjszaka csináltam, rájöttem hogy a stoptimes nem mindig tartalmaz 10 buszt, így át kell kasztolni tömbbé, majd vizgálni a méretére
+    // at night, the "stoptimes" doesn't always contain 10 buses, so I have to cast it into arrays and then scan the size
     JsonArray& nestedArray = root["data"]["entry"]["stopTimes"].asArray();
 
-// mikor éjszaka csináltam, rájöttem hogy a stoptimes nem mindig tartalmaz 10 buszt, csak a fél órán belül indulókat, így vizsgálni kell a tömb méretére, ugyanis ha olyanra hivatkozunk, ami nincs, egyből Guru Error CPU halt következik be!
-    Serial.print("A stopTimes mérete: ");
+    // at night, the "stoptimes" doesn't always contain 10 buses, only those that depart within half an hour, so we need to look at the size of the array, because if we refer to something that isn't there, it throws a Guru CPU Error
+    Serial.print("Size of stopTimes: ");
     Serial.println(nestedArray.size());
 
     ArraySize=nestedArray.size();
@@ -385,13 +385,12 @@ bool readReponseContent() {
         if (aktualisbusz.containsKey("predictedArrivalTime"))
         {
             Serial.println("Predicted");
-
-//mivel milliszekundumban vannak, amit csak long longban lehetne eltárolni de mi nem tudjuk, ezért levágjuk az első 10 számot, neveknél meg az első 25 karaktert hogy kiférjen a kijelzőre biztosan így másodperces felbontást kapunk, de sima long-ban el tudjuk így már tárolni az időket
+            // they are in milliseconds, which can only be stored in long long, but we can't do that so we cut off the first 10 numbers (with names the first 25 characters), to fit the display for sure so we get a resolution of one seconds, so that we can store the times in plain long
             strncpy(buszlista[i].stopHeadsign, root["data"]["entry"]["stopTimes"][i]["stopHeadsign"],20
                    );
             strncpy(buszlista[i].predictedArrivalTime, root["data"]["entry"]["stopTimes"][i]["predictedArrivalTime"],10);
             buszlista[i].predictedArrivalTimeLong = atol(buszlista[i].predictedArrivalTime);
-            buszlista[i].predictedArrivalMinutesInt = SecondsToMinutes(buszlista[i].predictedArrivalTimeLong-currentTimeLong);  //az aktuális idő kivonása, majd átváltás másodpercről percre
+            buszlista[i].predictedArrivalMinutesInt = SecondsToMinutes(buszlista[i].predictedArrivalTimeLong-currentTimeLong);  // subtract the current time and then convert it from second to minute
             ArrivalMinutesToString(buszlista[i].predictedArrivalMinutesInt,buszlista[i].predictedArrivalMinutesString);
 
             char tripId[32];
@@ -413,7 +412,7 @@ bool readReponseContent() {
             Serial.print("shortName=");
             Serial.println(shortName);
 
-            //csak akkor alszik el a LED, ha sikeresen át tudtuk írni
+            // the LED will only turn off if we have been able to overwrite it successfully
             digitalWrite(25, LOW);
         }
         else if(aktualisbusz.containsKey("arrivalTime")) {
@@ -421,8 +420,8 @@ bool readReponseContent() {
             Serial.println("Arrival");
             strncpy(buszlista[i].stopHeadsign, root["data"]["entry"]["stopTimes"][i]["stopHeadsign"],20);
             strncpy(buszlista[i].predictedArrivalTime, root["data"]["entry"]["stopTimes"][i]["arrivalTime"],10);
-            buszlista[i].predictedArrivalTimeLong = atol(buszlista[i].predictedArrivalTime); //átkasztolás stringről longba
-            buszlista[i].predictedArrivalMinutesInt = SecondsToMinutes(buszlista[i].predictedArrivalTimeLong-currentTimeLong);  //az aktuális idő kivonása, majd átváltás másodpercről percre
+            buszlista[i].predictedArrivalTimeLong = atol(buszlista[i].predictedArrivalTime); // cast from string to long
+            buszlista[i].predictedArrivalMinutesInt = SecondsToMinutes(buszlista[i].predictedArrivalTimeLong-currentTimeLong);  // subtract the current time and then convert it from second to minute
             ArrivalMinutesToString(buszlista[i].predictedArrivalMinutesInt,buszlista[i].predictedArrivalMinutesString);
 
             char tripId[32];
@@ -444,7 +443,7 @@ bool readReponseContent() {
             Serial.print("shortName=");
             Serial.println(shortName);
 
-            //csak akkor alszik el a LED, ha sikeresen át tudtuk írni
+            // the LED will only turn off if we have been able to overwrite it successfully
             digitalWrite(25, LOW);
         }
         else {
@@ -452,7 +451,7 @@ bool readReponseContent() {
         }
     }
     if(maxArraySize==0) {
-        //azért mert ha nem található indulás a következő 60 percben akkor nem alszik el a LED szóval ki kell kapcsolni
+        // if no start is found in the next 60 minutes then the LED will not go off so let's just turn it off
         digitalWrite(25, LOW);
     }
     return true;
