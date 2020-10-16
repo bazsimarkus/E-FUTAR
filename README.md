@@ -1,136 +1,124 @@
-﻿# E-FUTÁR ![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/bkk_icon.png)
-**Beágyazott BKK Futár port ESP32 SoC-ra SSD1306 OLED kijelzővel, Arduino fejlesztőkörnyezetben**
+﻿# E-FUTÁR / E-FUTAR ![BKK logo](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/bkk_icon.png)
+**Embedded BKK FUTÁR application port for ESP32 SoC with SSD1306 OLED display**
 
-Írta: Márkus Balázs
+Written by Balazs Markus
 
-*This repository contains an embedded online bus tracking software that is only useful in Budapest, Hungary - so the documentation is written in Hungarian as well. Thanks for understanding!*
+With the help of this program, the microcontroller displays the next buses departing from a given bus stop and the remaining time until departure, as well as the current time on an OLED display.
+The program can handle several stops, you can switch between them with the built-in button of the development card, the loading status is indicated by the built-in white SMD LED.
 
-A program segítségével a mikrokontroller egy OLED kijelzőre kiírja az adott megállóból induló következő buszokat, és indulásig hátralévő idejüket, valamint az aktuális időt. A program több megállót is képes kezelni, ezek között a fejlesztőkártya beépített gombjával válthatunk, a loading állapotot a beépített fehér SMD LED jelzi.
+## Usage & Screenshots
+**Boot screen**
 
-## Használat, screenshotok
-**Boot képernyő**
+![Boot screen](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/screenshot1.jpg)
 
-![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/screenshot1.jpg)
+**Bus list screen**
 
-**Busz lista**
+![Bus list screen](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/screenshot2.jpg)
 
-![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/screenshot2.jpg)
+The program starts immediately after the development board is powered on, connects to the configured WiFi network (see the configuration section), and then displays the next 3 buses starting from the default bus stop. According to the JSON command, the program only scans buses departing in the next 60 minutes. If it finds less than three buses, it displays two or one line, and if no match is found, displays an error message: "No departure found within 60 minutes."
 
+You can switch between each bus stop with the built-in button on the developer card (marked in blue) or by manipulating the corresponding GPIO pin accordingly. When the button is pressed, the white LED integrated on the card (marked in black) flashes to indicate the loading status (because the modified JSON request has to wait for a response), if the stop changes successfully, the LED goes out and the OLED display shows the name of the other stop, and the departing buses just like in the previous cases.
+![changeStops button](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/changeStops.jpg)
 
-A program a fejlesztőkártya áram alá helyezése után azonnal elindul, felcsatlakozik a felkonfigurált WiFi hálózatra (lásd a konfigurálás bekezdést), majd kijelzi az alapértelmezett buszmegállóból induló 3 következő buszt. A JSON parancs szerint a program csak a követező 60 percben induló buszokat vizsgálja. Amennyiben háromnál kevesebb buszt talál, úgy kettő, vagy egy sort jelenít meg, találat hiánya esetén pedig a "Nem található indulás 60 percen belül." hibaüzenetet jeleníti meg.
-
-Az egyes buszmegállók között a fejlesztőkártya beépített gombjával (kékkel jelölve), vagy a hozzá tartozó GPIO pin megfelelő manipulálásával válthatunk. A gomb lenyomása esetén a kártyára integrált fehér LED (feketével jelölve) felvillanása jelzi a loading állapotot (ugyanis a módosított JSON request-re meg kell várni a válasz érkezését), sikeres megállóváltás esetén a LED elalszik, és az OLED kijelzőn megjelenik a másik megálló neve, és az induló járatok, az előző módok szerint.
-![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/changeStops.jpg)
-
-A példaprogramba három darab megálló lett integrálva, ezek sorrendben: 
+Three bus stops have been integrated into the example program, in order: 
  - Pesterzsébet, Baross utca
  - Pesterzsébet, Városközpont
  - János utca
 
-**A használatbavétel előtt a WiFi-hez szükséges SSID és pass, valamint a megállók listáját fel kell konfigurálni, ehhez lásd a "konfigurálás" bejegyzés tartalmát!**
+**Before use, the SSID and pass for the WiFi as well as the list of stops  must be configured, see the contents of the "Configuration & Setup" part of this documentation!**
 
 
-## Működés
+## How it works
 
-A program alapvetően egy megszakításokkal kiegészített Round Robin architektúrát követ, bonyolultabb architektúra használatára nem volt szükség. A megállók kijelzése pedig egy egyszerű állapotgép-modell alapján történik, ahol az aktuális állapotot mindig egy darab megálló testesíti meg.
+The program basically follows a round robin architecture with interrupts, there was no need to use a more complex architecture. The stops are displayed on the basis of a simple state machine model, where the current state is always embodied by one stop.
 
-A program bekapcsoláskor felcsatlakozik a WiFi hálózatra, majd adott időközönként HTTP requesteket küld a BKK FUTÁR szervere felé, ami egy szabványosított, úgynevezett JSON formátumú üzenetet küld vissza. Ez az üzenet minden információt tartalmaz, amire szükségünk van, ezért további parancsokkal a listát szűkíthetjük, 
+When turned on, the program connects to the WiFi network and then periodically sends HTTP requests to the BKK server, which returns a standardized message in JSON format. This message contains all the information we need, so we can use additional commands to narrow the list,
 
-> például ha csak a következő fél órában onduló buszok érdekelnek minket, a &minutesAfter=60 parancsot kell használnunk a lekérdezésben. 
+> for example, if we are only interested in buses departing in the next half hour, we should use the &minutesAfter=60 command in the query.
 
-A JSON szintaktikájáról itt olvasható több információ: https://www.json.org/ továbbá a használható parancsok listáját a BKK FUTÁR Apiary tartalmazza:  https://bkkfutar.docs.apiary.io/ 
-Miután a program elküldte a parancsot, a JSON library segítségével a visszakapott hosszú stringből (a HTTP válasz) érthető, objektumokból álló, és feldolgozható JSON objektumrendszert hoz létre. (További információ az ArduinoJSON Library dokumentációjában)
-A rendszeresített adathalmazból ezután különböző stringmanipulátor függvényekkel, és grafikus feldolgozó metódusokkal kiíratjuk a kijelzőre az induló buszokat, valamint a megálló nevét. További extra, hogy a program a jelenlegi időt is megjeleníti, ugyanis a BKK FUTÁR API az UNIX epoch időt is leküldi, így egy téli/nyári változó beállításával egy egyszerű függvénnyel kiszámolható a pontos idő. 
-A mikrovezérlő a gombnyomáshoz társított interrupt hatására kigyújtja a jelző LED-et, és módosítja a megálló változójának értékét. Sikeres megállóváltás esetén a LED kialszik.
+More information about JSON syntax can be found here: https://www.json.org/ and a list of available commands can be found in the BKK FUTAR Apiary: https://bkkfutar.docs.apiary.io/
+After the command is sent, the JSON library uses the returned long string (the HTTP response) to create an understandable, object-oriented, and processable JSON object system. (See the ArduinoJSON Library documentation for more information)
+From the data set, the departing buses and the name of the stop are then displayed on the display with various string manipulator functions and graphical processing methods. As an extra, the program also displays the current time, as the BKK API also sends the UNIX epoch time, so just by adding a winter / summer time indicator variable, the exact time can be calculated.
+As a result of an interrupt associated with the push of a button, the microcontroller lights up the indicator LED and changes the value of the stop variable. If the stop change is successful, the LED goes out.
 
-## Folyamatábra (mermaid)
+## Flowchart
 
-A program egyszerűsített működése grafikusan:
+Simplified operation of the program:
+![EFUTAR flowchart](https://raw.githubusercontent.com/bazsimarkus/E-FUTAR/master/docs/EFUTAR_flowchart.svg)
 
-```mermaid
-graph LR
-A[START] --> B(Adatok frissítése)
-B --> C(Megálló értékének kiíratása)
-C --> D{Gombnyomás történt?}
-D -->|Igen| B
-D -->|Nem| C
+## The development board
 
-```
+The program was written and tested on a ESP32 SoC-based WIFI-LoRa-32 development board manufactured by Heltec Automation, but can be ported to any Arduino-compatible microcontroller, as only the standard SSD1306 and WiFi libraries were used during the development.
 
-## A fejlesztőpanel
+ ![Heltec development board](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/Heltec_WIFI-LoRa-32_DiagramPinoutFromTop.jpg)
 
-A program az ESP32 SoC-on alapuló, Heltec Automation által gyártott WIFI-LoRa-32 fejlesztőkártyán íródott, és tesztelődött, de adott esetben bármilyen Arduino-kompatibilis mikrokontrollerre átültethető, ugyanis a fejlesztés során a szabványos SSD1306, és WiFi könyvtárak voltak használva.
+The program can run natively on the board, no other components or cables are required.
 
- ![enter image description here](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/Heltec_WIFI-LoRa-32_DiagramPinoutFromTop.jpg)
-
-A program natívan, közvetlenül a panelen futtatható, egyéb alkatrészekre, és kábelekre nincs szükség.
-
-## Fejlesztőkörnyezet
-A fejlesztés a nyílt forráskódú **Arduino IDE 1.6.9**-es verziójában történt.
-A fejlesztőkörnyezet letölthető innen:
+## IDE & Development
+The software was developed in the open source **Arduino IDE**.
+The development environment can be downloaded here:
 https://www.arduino.cc/en/Main/Software
-A sikeres compile-hoz szükséges a hardware library fájlok installálása is, melyek menete, és a hozzávaló fájlok az alábbi repository-ban találhatóak meg (lásd az Installation Guide-ot): 
+A successful compilation also requires the installation of hardware library files, the process and component files of which can be found in the following repository (see the Installation Guide):
 https://github.com/Heltec-Aaron-Lee/WiFi_Kit_series
 
-A driverek sikeres installálása után az Arduino IDE alaplapkezelőjében megjelenik a WIFI_LoRa_32 nevű board, ezt kell kiválasztanunk, majd a szokásos módszerrel lefordítani, és feltölteni a kódot.
+After the successful installation of the drivers, a board called WIFI_LoRa_32 will appear in the motherboard manager of the Arduino IDE, we need to select this and then compile and upload the code in the usual way.
 
-## Konfigurálás
-**1) WiFi felkonfigurálása**
+## Configuration & Setup
+**1) WiFi configuration**
 
-A kód feltöltése előtt a saját SSID és jelszó beállítandó az ssid és pass globális változókban:
+Before uploading the code, set your own SSID and password in the ssid and pass global variables:
 
 	char ssid[] = "SSID"; //  your network SSID (name)
 	char pass[] = "Pass";    // your network password (use for WPA, or use as key for WEP)
 
-**2) Megállók felkonfigurálása**
+**2) Bus stop configuration**
 
-*Bevezető: A BKK FUTÁR rendszerében minden megállónak egyedi azonosítója van, melyek alapján a BKK FUTÁR API-ban, JSON formátumban lekérdezhető szinte minden fontos adat egy adott megállóról, vagy viszonylatról. Ennek pontos metodikájáról az alábbi, félhivatalos apiary-dokumentációban lehet olvasni: https://bkkfutar.docs.apiary.io/
-A megállók kódjának kiderítésére egy egyszerű, térképes forma a BKK FUTÁR webes oldala, ahol egy adott megállóra kattintva, majd ott egy tetszőleges járatot kiválasztva a weboldal URL-jében megjelenik a kiválasztott megálló kódja (pl. Pesterzsébet, Baross utca esetén: F04144)
-Az oldal elérhető itt: http://futar.bkk.hu/*
+*Introduction: In the BKK FUTÁR system, each stop has a unique identifier, based on which almost all important data about a given stop or route can be queried in the BKK FUTÁR API, in JSON format. The exact methodology for this can be found in the following semi-official apiary documentation: https://bkkfutar.docs.apiary.io/
+To find out the code of the stops, there is a map on the BKK FUTÁR website, where by clicking on a given stop and then selecting any bus line there, the code of the selected stop will appear in the website URL (e.g. Pesterzsébet, Baross utca: F04144)
+The page is available here: http://futar.bkk.hu/*
 
-A megállók váltása a megallo globális változó állításával, majd a setStop függvény meghívásával történik, melynek hatására a következő lekérdezési ciklusban már az új megálló kódjával fogja küldeni a lekérdezést a szerver felé a mikrokontroller. Így a kívánt megálló kódjának megszerzése után, csupán a JSON request értékét kell módosítanunk:
+Stops are changed by setting the global variable "megallo" and then calling the setStop function, which will cause the microcontroller to send the query to the server with the code of the new stop in the next query cycle. Thus, after obtaining the code of the desired stop, we only need to change the value of the JSON request:
 
-	if(megallo==Baross) {
+	if(currentStop==Baross) {
         stopName = "Baross utca";
         resource = "/bkk-utvonaltervezo-api/ws/otp/api/where/arrivals-and-departures-for-stop.json?stopId=BKK_F04144&onlyDepartures=onlyDepartures&limit=10&minutesBefore=0&minutesAfter=60";                    // http resource
     }
-Ne feledjük az alapértelmezett megállóérték megadását sem, ezt a globális változó létrehozásakor elsőként megadott érték jelenti!
+Remember to enter the default stop value, which is the first value entered when creating the global variable!
 
 	char* stopName = "Baross utca";
 	char* resource = "/bkk-utvonaltervezo-api/ws/otp/api/where/arrivals-and-departures-for-stop.json?stopId=BKK_F04144&onlyDepartures=onlyDepartures&limit=10&minutesBefore=0&minutesAfter=60";                    // http resource
 
-**A műveletek elvégzése után a program a kártyára feltölthetővé válik.**
+**After completing these steps, the program can be uploaded to the board.**
 
-## Könyvtárak
+## Libraries
 
-A fejlesztés során a következő könyvtárak voltak használva:
+*The following libraries were used during the development:*
 
-
-Arduino WiFi Library - a csatlakozáshoz
+Arduino WiFi Library - to connect
 
 https://github.com/arduino/Arduino/tree/master/libraries/WiFi
 
-Adafruit SSD1306 Library - a kijelző vezérléséhez
+Adafruit SSD1306 Library - for display control
 
 https://github.com/adafruit/Adafruit_SSD1306
 
-ArduinoJSON Library - a http válasz parse-olásához
+ArduinoJSON Library - to parse the http response
 
 https://github.com/bblanchon/ArduinoJson
 
-## Fejlesztési lehetőségek
+## Development possibilities
 
- - kliensalkalmazás a WiFi felkonfigurálására
- - kliensalkalmazás a megállók felkonfigurálására
- - ébresztő hangjelzés buzzer segítségével egy adott buszjárathoz kötve
- - buszok menetrendi statisztikáinak, késéseinek online grafikus követése egy JavaScript alkalmazásban
+ - client application for WiFi confuguration
+ - client application for bus stop configuration
+ - alarm with a buzzer, linked to a specific bus service
+ - online tracking of bus schedule statistics and delays in a web application
 
-## Források, és köszönet
+## Sources
 
-A projektben nagy segítségemre volt Balássy György cikksorozata:
+György Balássy's blog posts helped me a lot in the project:
 
 https://balassygyorgy.wordpress.com/2016/02/02/bkk-futar-microsoft-bandre-2-bkk-futar-api/
 
-Valamint a BKK FUTÁR Apiary:
+As well as the BKK FUTÁR Apiary:
 
 https://bkkfutar.docs.apiary.io/
