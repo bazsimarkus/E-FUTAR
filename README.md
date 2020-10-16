@@ -18,6 +18,7 @@ The program can handle several stops, you can switch between them with the built
 The program starts immediately after the development board is powered on, connects to the configured WiFi network (see the configuration section), and then displays the next 3 buses starting from the default bus stop. According to the JSON command, the program only scans buses departing in the next 60 minutes. If it finds less than three buses, it displays two or one line, and if no match is found, displays an error message: "No departure found within 60 minutes."
 
 You can switch between each bus stop with the built-in button on the developer card (marked in blue) or by manipulating the corresponding GPIO pin accordingly. When the button is pressed, the white LED integrated on the card (marked in black) flashes to indicate the loading status (because the modified JSON request has to wait for a response), if the stop changes successfully, the LED goes out and the OLED display shows the name of the other stop, and the departing buses just like in the previous cases.
+
 ![changeStops button](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/changeStops.jpg)
 
 Three bus stops have been integrated into the example program, in order: 
@@ -77,7 +78,7 @@ Before uploading the code, set your own SSID and password in the ssid and pass g
 To find out the code of the stops, there is a map on the BKK FUTÁR website, where by clicking on a given stop and then selecting any bus line there, the code of the selected stop will appear in the website URL (e.g. Pesterzsébet, Baross utca: F04144)
 The page is available here: http://futar.bkk.hu/*
 
-Stops are changed by setting the global variable "megallo" and then calling the setStop function, which will cause the microcontroller to send the query to the server with the code of the new stop in the next query cycle. Thus, after obtaining the code of the desired stop, we only need to change the value of the JSON request:
+Stops are changed by setting the global variable "currentStop" and then calling the setStop function, which will cause the microcontroller to send the query to the server with the code of the new stop in the next query cycle. Thus, after obtaining the code of the desired stop, we only need to change the value of the JSON request:
 
 	if(currentStop==Baross) {
         stopName = "Baross utca";
