@@ -1,8 +1,6 @@
 ﻿# E-FUTÁR / E-FUTAR ![BKK logo](https://github.com/bazsimarkus/E-FUTAR/raw/master/docs/bkk_icon.png)
 **Embedded BKK FUTÁR application port for ESP32 SoC with SSD1306 OLED display**
 
-Written by Balazs Markus
-
 With the help of this program, the microcontroller displays the next buses departing from a given bus stop and the remaining time until departure, as well as the current time on an OLED display.
 The program can handle several stops, you can switch between them with the built-in button of the development card, the loading status is indicated by the built-in white SMD LED.
 
